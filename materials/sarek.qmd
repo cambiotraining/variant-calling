@@ -1,0 +1,112 @@
+# The `sarek` workflow
+
+:::{.callout-tip}
+#### Learning objectives
+
+- TODO
+:::
+
+## Overview
+
+Brief description of the workflow, its purpose, and its applications.
+
+## Running `sarek`
+
+```bash
+nextflow run nf-core/sarek -resume \
+  -profile "singularity" \
+  -r "3.7.1" -c sarek.config \
+  --input "soudi2023_sarek_samplesheet.csv" \
+  --outdir "results/sarek" \
+  --intervals "resources/aaegypti-AaegL5-ensembl-61.genome_intervals.bed" \
+  --tools "haplotypecaller,vep" \
+  --joint_germline true \
+  --filter_vcfs false \
+  --vep_cache "resources/vep-cache/" \
+  --vep_species "aedes_aegypti_lvpagwg" \
+  --vep_cache_version "61" --vep_genome "AaegL5" \
+  --igenomes_ignore true \
+  --bwa "resources/aaegypti-AaegL5-ensembl-61/bwa-mem/" \
+  --dict "resources/aaegypti-AaegL5-ensembl-61/genome.dict" \
+  --fasta "resources/aaegypti-AaegL5-ensembl-61/genome.fa" \
+  --known_snps "resources/vcf-ensembl-61/aedes_aegypti_lvpagwg.snps.vcf.gz" \
+  --known_snps_tbi "resources/vcf-ensembl-61/aedes_aegypti_lvpagwg.snps.vcf.gz.tbi" \
+  --known_indels "resources/vcf-ensembl-61/aedes_aegypti_lvpagwg.indels.vcf.gz" \
+  --known_indels_tbi "resources/vcf-ensembl-61/aedes_aegypti_lvpagwg.indels.vcf.gz.tbi"
+```
+
+- `-profile` indicates we want to use singularity containers to run the workflow. 
+- `-r` specifies the version of `sarek` to use.
+- `-c` specifies a custom configuration file to use (the `sarek.config` file is explained below).
+- `--input` specifies the samplesheet to use as input to the workflow. This file should be in CSV format and contain the necessary information about the samples to be processed, detailed below.
+- `--outdir` specifies the output directory where the results of the workflow will be stored.
+- `--intervals`
+- `--tools`
+- `--joint_germline`
+- `--filter_vcfs`
+- `--vep_cache`
+- `--vep_species`
+- `--vep_cache_version`
+- `--vep_genome`
+- `--igenomes_ignore`
+- `--bwa`
+- `--dict`
+- `--fasta`
+- `--known_snps`
+- `--known_snps_tbi`
+- `--known_indels`
+- `--known_indels_tbi`
+
+### Configuration
+
+The content of `sarek.config`:
+
+```groovy
+process {
+  withName: GATK4_GENOTYPEGVCFS {
+    memory = 30.GB
+  }
+}
+```
+
+We included this as the default memory used by this process is 6 GB, which may not be sufficient when processing larger genomes with a high number of samples. 
+We changed its default to 30 GB, which should be sufficient for our dataset.
+
+### Intervals
+
+The `sarek` workflow can be made more efficient (both in terms of time run and computational resources) by processing the genome in chunks.
+This can be achieved by specifying an intervals file, which is a BED file containing the coordinates of the regions to be processed.
+
+What `sarek` will do is split the genome into the specified intervals, and perform the variant calling on each interval separately. 
+This should not affect the outcome significantly, as long as the intervals are not too small, as variant calling tools typically use a window around the variant to perform the calling, and if the intervals are too small, this window may not be sufficient to capture all the necessary information for accurate variant calling.
+
+One question to ask though is where should we split the genome at?
+To retain the accuracy in the variant calling, it is a good idea to split the genome at regions that are less likely to contain variants, or that are usually not easy to call variants.
+The most obvious choise is to split the genome at the centromeres, as these are typically regions that are not well assembled and are also difficult to call variants in.
+
+In our case, we obtained the approximate centromere positions from the literature (see [Matthews et al. 2018](https://doi.org/10.1038/s41586-018-0692-z)), and used these to create the intervals file.
+The Aedes genome has three chromosomes, the mitochondrial chromosome, and several unassembled scaffolds. 
+We kept the mitochondrial genome and unassembled scaffolds as full intervals, and split the three chromosomes into two intervals each, one for the left arm and one for the right arm, using the centromere positions as the splitting point.
+
+Here is the top few lines of our intervals file: 
+
+```
+1             0          152000000
+1             152000000  310827022
+2             0          229500000
+2             229500000  474425716
+3             0          198500000
+3             198500000  409777670
+MT            0          16790
+NIGP01001877  0          640510
+NIGP01002089  0          541992
+NIGP01002231  0          428575
+... truncated for brevity ...
+```
+
+As you can see, each chromosome is split into two intervals, and the unassembled scaffolds are kept as full intervals.
+`sarek` will automatically take this intervals file, and process each interval separately, or intervals together if they are small enough. 
+The results are then merged at the end, so that we get a single VCF file containing the variants called across the genome. 
+
+If you wanted to exclude the unassembled scaffolds, you could simply remove the lines corresponding to these scaffolds from the intervals file, and `sarek` would then only process the three chromosomes.
+

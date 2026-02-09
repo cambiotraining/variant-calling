@@ -1,9 +1,10 @@
 ---
-title: "Introdution to Variant Calling"
-author: "Victor Flores-Lopez, Hugo Tavares"
+pagetitle: "Variant Calling"
 date: today
 number-sections: false
 ---
+
+# Germline Variant Calling {.unnumbered}
 
 ## Overview 
 

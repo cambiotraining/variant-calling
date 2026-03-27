@@ -64,13 +64,13 @@ The content of `sarek.config`:
 ```groovy
 process {
   withName: GATK4_GENOTYPEGVCFS {
-    memory = 30.GB
+    memory = 60.GB
   }
 }
 ```
 
 We included this as the default memory used by this process is 6 GB, which may not be sufficient when processing larger genomes with a high number of samples. 
-We changed its default to 30 GB, which should be sufficient for our dataset.
+We changed its default to 60 GB, which should be sufficient for our dataset (we tested, for example 30 GB, and that was not enough).
 
 ### Intervals
 
